@@ -65,6 +65,9 @@ final class UpdateFeed {
             connection.setReadTimeout(10000);
             connection.setInstanceFollowRedirects(false);
             connection.setUseCaches(false);
+            if ("api.github.com".equalsIgnoreCase(url.getHost()) && url.getPath().matches("/repos/[^/]+/[^/]+/contents/.+")) {
+                connection.setRequestProperty("Accept", "application/vnd.github.raw+json");
+            }
             boolean keep = false;
             try {
                 int code = connection.getResponseCode();

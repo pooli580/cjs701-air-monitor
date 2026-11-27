@@ -84,7 +84,7 @@ public final class UpdateActivity extends Activity {
         source.setTextSize(15);
         source.setContentDescription("HTTPS 更新源");
         source.setHint("https://…/latest.json");
-        source.setText(preferences.getString(SOURCE_KEY, AppConfig.UPDATE_FEED));
+        source.setText(AppConfig.updateFeed(preferences.getString(SOURCE_KEY, "")));
         page.addView(source, new LinearLayout.LayoutParams(-1, -2));
 
         action = new Button(this);

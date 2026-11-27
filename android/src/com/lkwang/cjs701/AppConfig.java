@@ -18,9 +18,14 @@ final class AppConfig {
     static final String MONITOR_TOPIC = "mqtt_monitor_topic";
     static final String MONITOR_LAN = "monitor_lan_url";
     static final String MQTT_CA = "mqtt_ca_pem";
-    static final String UPDATE_FEED = "https://github.com/pooli580/cjs701-air-monitor/releases/latest/download/latest.json";
+    static final String UPDATE_FEED = "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/latest.json?ref=updates";
+    private static final String OLD_UPDATE_FEED = "https://github.com/pooli580/cjs701-air-monitor/releases/latest/download/latest.json";
 
     private AppConfig() {}
+
+    static String updateFeed(String saved) {
+        return saved.isEmpty() || OLD_UPDATE_FEED.equals(saved) ? UPDATE_FEED : saved;
+    }
 
     static String value(Map<String, ?> settings, String key) {
         Object value = settings.get(key);
