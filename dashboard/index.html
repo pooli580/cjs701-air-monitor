@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>局域网监控 · MD1000</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light;
+  --ink: #23332f; --sub: #52635b; --line: #dce5db;
+  --accent: #206b55; --soft: #e3f1e9; --panel: #fff;
+  font: 15px/1.5 "Inter", "Microsoft YaHei", sans-serif;
+  background: #f4f6f0; color: var(--ink);
+}
+* { box-sizing: border-box }
+body { margin: 0 }
+main { max-width: 1120px; margin: auto; padding: 46px 28px 44px }
+h1, h2, p { margin: 0 }
+h1 { font-size: clamp(28px, 5vw, 44px); letter-spacing: -.045em; line-height: 1.15 }
+h2 { font-size: 19px; letter-spacing: -.02em }
+button, select { font: inherit; color: inherit }
+button { cursor: pointer }
+button:focus-visible, select:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+.heading, .chart-head, .summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.heading { align-items: end; margin-bottom: 23px }
+.updated { color: var(--sub); font-size: 13px; text-align: right }
+.status-grid, .readings { display: grid; gap: 11px }
+.status-grid { grid-template-columns: repeat(3, 1fr); margin-bottom: 14px }
+.status, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 15px }
+.status { padding: 15px 17px; display: grid; gap: 5px }
+.status strong { font-size: 15px }
+.status-meta { display: flex; align-items: center; gap: 7px; color: var(--sub); font-size: 13px }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #8b958d }
+.dot.up { background: var(--accent) }
+.dot.down { background: #b85740 }
+.panel { padding: 21px; margin-bottom: 14px }
+.summary { margin-bottom: 12px }
+.detail, .chart-note { color: var(--sub); font-size: 13px }
+.readings { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px }
+.metric {
+  min-width: 0; text-align: left; display: grid; gap: 4px; padding: 11px 10px;
+  background: #f6f8f4; border: 1px solid transparent; border-radius: 10px;
+}
+.metric:hover, .metric[aria-pressed=true] { background: var(--soft); border-color: #adcebd }
+.metric-name { color: var(--sub); font-size: 12px }
+.value { font-size: clamp(16px, 2vw, 21px); font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums }
+.unit { font-size: 11px; color: var(--sub); white-space: nowrap }
+.chart-head { margin: 17px 0 8px; flex-wrap: wrap }
+.summary select { border: 1px solid var(--line); border-radius: 8px; background: white; padding: 5px 9px }
+.ranges { display: flex; gap: 4px; padding: 3px; border-radius: 9px; background: #edf2eb }
+.ranges button { border: 0; background: transparent; border-radius: 7px; padding: 5px 9px; color: var(--sub); font-size: 13px }
+.ranges button[aria-pressed=true] { color: #184c3f; background: white; box-shadow: 0 1px 3px #2b423221 }
+.plot { position: relative }
+canvas { display: block; width: 100%; height: 208px }
+.cursor { position: absolute; top: 9px; right: 9px; background: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px; pointer-events: none; font-size: 12px }
+.chart-note { margin-top: 6px }
+.chart-note:empty { display: none }
+.connection { padding-block: 12px }
+.connection summary { cursor: pointer; font-weight: 650; font-size: 14px }
+.connection .summary { justify-content: flex-end; margin-top: 8px }
+.performance { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px }
+.performance article { padding: 12px; background: #f6f8f4; border-radius: 10px; display: grid; gap: 5px }
+.performance progress { width: 100%; height: 7px; accent-color: var(--accent) }
+.performance small { color: var(--sub); font-size: 11px }
+.system-status { display: flex; gap: 10px 18px; flex-wrap: wrap; margin-top: 14px }
+.system-status .dot, .status-meta .dot { flex-shrink: 0 }
+.events { margin: 0; padding: 0; list-style: none }
+.events li { display: grid; grid-template-columns: 122px 64px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px }
+.events time, .event-level { color: var(--sub); font-size: 12px }
+.event-level.warning { color: #865022 }
+.event-level.error { color: #a13b25 }
+.event-text strong { margin-right: 6px }
+@media (max-width: 700px) {
+  main { padding: 25px 14px 24px }
+  .heading { align-items: flex-start; flex-direction: column }
+  .updated { text-align: left }
+  .readings { grid-template-columns: repeat(4, minmax(0, 1fr)) }
+  .panel { padding: 14px }
+  .status { padding: 10px; overflow-wrap: anywhere }
+  .performance { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .events li { grid-template-columns: 1fr auto; gap: 3px 8px }
+  .event-text { grid-column: 1 / -1 }
+  canvas { height: 172px }
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="heading">
+    <h1>局域网监控</h1>
+    <p class="updated" id="updated" role="status">正在读取 MD1000 采样记录</p>
+  </header>
+  <section class="status-grid" aria-label="设备连接状态">
+    <div class="status"><strong>ESP32 传感器</strong><div class="status-meta"><span class="dot"></span><span data-status="esp">等待采样</span></div></div>
+    <div class="status"><strong>路由器</strong><div class="status-meta"><span class="dot"></span><span data-status="router">等待采样</span></div></div>
+    <div class="status"><strong>公网探测</strong><div class="status-meta"><span class="dot"></span><span data-status="wan">等待采样</span></div></div>
+  </section>
+  <details class="panel connection" id="connection">
+    <summary>网络延迟记录</summary>
+    <div class="summary">
+      <select id="probe" aria-label="选择检测目标">
+        <option value="wan">公网响应</option>
+        <option value="router">路由器响应</option>
+        <option value="esp">ESP32 响应</option>
+      </select>
+    </div>
+    <div class="plot">
+      <canvas id="probe-chart" role="img" aria-label="联网响应时间历史曲线" tabindex="0"></canvas>
+      <output class="cursor" id="probe-cursor" hidden></output>
+    </div>
+    <p class="chart-note" id="probe-note"></p>
+  </details>
+  <section class="panel">
+    <div class="summary"><h2>空气质量</h2><p class="detail" id="air-detail"></p></div>
+    <div class="readings" id="readings"></div>
+    <div class="chart-head">
+      <strong id="metric-heading">温度趋势</strong>
+      <div class="ranges" aria-label="时间范围">
+        <button data-range="1h" aria-pressed="false">1 小时</button>
+        <button data-range="6h" aria-pressed="false">6 小时</button>
+        <button data-range="24h" aria-pressed="true">24 小时</button>
+      </div>
+    </div>
+    <div class="plot">
+      <canvas id="air-chart" role="img" aria-label="空气质量历史曲线" tabindex="0"></canvas>
+      <output class="cursor" id="air-cursor" hidden></output>
+    </div>
+    <p class="chart-note" id="air-note"></p>
+  </section>
+  <section class="panel">
+    <div class="summary"><h2>MD1000 性能</h2><p class="detail" id="system-updated">等待采样</p></div>
+    <div class="performance">
+      <article><span class="metric-name">CPU 使用率</span><strong class="value" id="cpu">—</strong><progress id="cpu-usage" aria-label="CPU 使用率" max="100" hidden></progress></article>
+      <article><span class="metric-name">内存使用</span><strong class="value" id="memory">—</strong><progress id="memory-usage" aria-label="内存使用率" max="100" hidden></progress><small id="memory-detail"></small></article>
+      <article><span class="metric-name">系统分区</span><strong class="value" id="disk">—</strong><progress id="disk-usage" aria-label="系统分区使用率" max="100" hidden></progress><small id="disk-detail"></small></article>
+      <article><span class="metric-name">CPU 温度</span><strong class="value" id="temperature">—</strong></article>
+      <article><span class="metric-name">运行时间</span><strong class="value" id="uptime">—</strong></article>
+    </div>
+    <div class="system-status" id="services" aria-label="服务状态"></div>
+  </section>
+  <section class="panel">
+    <div class="summary"><h2>状态与报错日志</h2><p class="detail">最近 24 小时</p></div>
+    <p class="detail" id="log-empty">等待日志</p>
+    <ul class="events" id="events"></ul>
+  </section>
+</main>
+<script>
+const metrics = {
+  temperature_c: ['温度', '°C', 1], humidity_pct: ['湿度', '%', 1],
+  hcho_mg_m3: ['甲醛', 'mg/m³', 3], tvoc_mg_m3: ['TVOC', 'mg/m³', 3],
+  eco2_ppm: ['eCO₂', 'ppm', 0], eco_ppm: ['eCO', 'ppm', 1], aqi: ['AQI', '', 0]
+};
+const $ = id => document.getElementById(id);
+const remote = location.hostname === 'md1000-monitor.invalid';
+if (remote) document.querySelector('h1').textContent = '远程监控';
+const clock = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' });
+const fullClock = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+let range = '24h', metric = 'temperature_c', data, health, requestId = 0;
+const buttons = {};
+for (const [key, [label, unit]] of Object.entries(metrics)) {
+  const button = document.createElement('button');
+  button.className = 'metric';
+  button.innerHTML = '<span class="metric-name"></span><span class="value">—</span><span class="unit"></span>';
+  button.children[0].textContent = label;
+  button.children[2].textContent = unit || '指数';
+  button.onclick = () => { metric = key; render(); };
+  buttons[key] = button;
+  $('readings').append(button);
+}
+function draw(id, values, unit, digits, showFailures) {
+  const canvas = $(id + '-chart');
+  const tip = $(id + '-cursor');
+  tip.hidden = true;
+  const w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const valid = values.filter(p => p.y != null);
+  if (!data || (!valid.length && !showFailures)) {
+    ctx.fillStyle = '#52635b'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('暂无有效采样', w / 2, h / 2);
+    return;
+  }
+  let lo = valid.length ? Math.min(...valid.map(p => p.y)) : 0;
+  let hi = valid.length ? Math.max(...valid.map(p => p.y)) : 10;
+  if (showFailures) lo = 0;
+  const padding = Math.max(10 ** -digits, (hi - lo) * .12, Math.abs(hi) * .008);
+  hi += padding;
+  if (!showFailures) lo -= padding;
+  const left = 48, right = w - 13, top = 13, bottom = h - 27;
+  const x = ts => left + (right - left) * (ts - data.start) / (data.now - data.start);
+  const y = value => bottom - (bottom - top) * (value - lo) / (hi - lo);
+  ctx.font = '11px sans-serif'; ctx.fillStyle = '#52635b';
+  for (let i = 0; i <= 4; i++) {
+    const level = lo + i * (hi - lo) / 4;
+    ctx.strokeStyle = '#e1e8de'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y(level)); ctx.lineTo(right, y(level)); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.fillText(level.toFixed(digits), left - 7, y(level) + 4);
+  }
+  for (let i = 0; i <= 4; i++) {
+    const ts = data.start + i * (data.now - data.start) / 4;
+    ctx.textAlign = i === 4 ? 'right' : i === 0 ? 'left' : 'center';
+    ctx.fillText(clock.format(ts * 1000), x(ts), h - 5);
+  }
+  ctx.beginPath(); ctx.strokeStyle = '#206b55'; ctx.lineWidth = 2;
+  let previous = null;
+  for (const p of values) {
+    if (p.y == null) { previous = null; continue; }
+    if (previous && p.ts - previous.ts <= data.interval * 2) ctx.lineTo(x(p.ts), y(p.y));
+    else ctx.moveTo(x(p.ts), y(p.y));
+    previous = p;
+  }
+  ctx.stroke();
+  for (const p of values) {
+    if (p.y == null && !showFailures) continue;
+    ctx.fillStyle = p.y == null ? '#b85740' : '#206b55';
+    ctx.beginPath(); ctx.arc(x(p.ts), p.y == null ? bottom - 3 : y(p.y), p.y == null || valid.length < 15 ? 3 : 1.5, 0, 2 * Math.PI); ctx.fill();
+  }
+  let selected = values.length - 1;
+  function show(index) {
+    const p = values[index];
+    if (!p) return;
+    selected = index;
+    tip.textContent = fullClock.format(p.ts * 1000) + ' · ' + (p.y == null ? '未响应' : p.y.toFixed(digits) + (unit ? ' ' + unit : ''));
+    tip.hidden = false;
+  }
+  canvas.onpointermove = e => {
+    const at = e.clientX - canvas.getBoundingClientRect().left;
+    const nearest = values.reduce((index, p, i) => index < 0 || Math.abs(x(p.ts) - at) < Math.abs(x(values[index].ts) - at) ? i : index, -1);
+    show(nearest);
+  };
+  canvas.onpointerleave = canvas.onblur = () => { tip.hidden = true; };
+  canvas.onfocus = () => show(selected);
+  canvas.onkeydown = e => {
+    if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    e.preventDefault();
+    show(Math.max(0, Math.min(values.length - 1, selected + (e.key === 'ArrowLeft' ? -1 : 1))));
+  };
+}
+function render() {
+  const rows = data?.samples || [];
+  const last = rows.at(-1);
+  const fresh = last && data.now - last.ts <= (remote ? 105 : data.interval * 2);
+  if (data) $('updated').textContent = last ? '最近采样 ' + fullClock.format(last.ts * 1000) : '等待首次采样';
+  for (const label of document.querySelectorAll('[data-status]')) {
+    const ms = fresh ? last[label.dataset.status] : null;
+    label.textContent = !fresh ? (last ? '采样已过期' : '等待采样') : ms == null ? '未响应' : '在线 · ' + ms + ' ms';
+    label.previousElementSibling.className = 'dot' + (fresh ? ms == null ? ' down' : ' up' : '');
+  }
+  const previousAir = [...rows].reverse().find(row => row.air);
+  $('air-detail').textContent = fresh && last.air ? '实时读数' : previousAir ? '上次有效读数' : '';
+  for (const [key, button] of Object.entries(buttons)) {
+    button.setAttribute('aria-pressed', key === metric);
+    const value = previousAir?.air[key];
+    button.children[1].textContent = value == null ? '—' : value.toFixed(metrics[key][2]);
+  }
+  const [label, unit, digits] = metrics[metric];
+  $('metric-heading').textContent = label + '趋势' + (unit ? ' · ' + unit : '');
+  draw('air', rows.map(row => ({ts: row.ts, y: row.air?.[metric]})), unit, digits, false);
+  const probe = $('probe').value;
+  if ($('connection').open) draw('probe', rows.map(row => ({ts: row.ts, y: row[probe]})), 'ms', 0, true);
+  $('air-note').textContent = rows.length ? rows.filter(row => row.air).length + ' 条有效读数' : '';
+  const missed = rows.filter(row => row[probe] == null).length;
+  $('probe-note').textContent = rows.length ? rows.length + ' 次探测 · ' + missed + ' 次未响应（红点）' : '暂无探测记录';
+}
+const states = {active: '运行中', failed: '异常', inactive: '未运行', activating: '启动中',
+  deactivating: '停止中', unconfigured: '未配置', unknown: '未知'};
+const levels = {info: '状态', warning: '告警', error: '错误'};
+const gib = bytes => (bytes / 1073741824).toFixed(1);
+
+function setUsage(id, percent) {
+  const valid = Number.isFinite(percent) && percent >= 0 && percent <= 100;
+  $(id).textContent = valid ? Math.round(percent) + '%' : '—';
+  $(id + '-usage').hidden = !valid;
+  if (valid) $(id + '-usage').value = percent;
+}
+
+function updateHealth(snapshot) {
+  if (snapshot && (!health || snapshot.sampled_at >= health.sampled_at)) health = snapshot;
+  if (!health) return;
+  const age = Math.floor(Date.now() / 1000) - health.sampled_at;
+  $('system-updated').textContent = (age > (remote ? 105 : 15) ? '数据已过期 · ' : '更新于 ') + fullClock.format(health.sampled_at * 1000);
+  setUsage('cpu', health.cpu_pct);
+  for (const key of ['memory', 'disk']) {
+    const usage = health[key];
+    setUsage(key, usage?.used * 100 / usage?.total);
+    $(key + '-detail').textContent = usage ? gib(usage.used) + ' / ' + gib(usage.total) + ' GiB' : '';
+  }
+  $('temperature').textContent = Number.isFinite(health.temperature_c) ? health.temperature_c.toFixed(1) + ' °C' : '—';
+  const minutes = Math.floor(health.uptime_seconds / 60);
+  $('uptime').textContent = Number.isFinite(health.uptime_seconds)
+    ? (minutes >= 1440 ? Math.floor(minutes / 1440) + ' 天 ' : '') + Math.floor(minutes % 1440 / 60) + ' 小时 ' + minutes % 60 + ' 分'
+    : '—';
+  $('services').replaceChildren(...(health.services || []).map(service => {
+    const item = document.createElement('span');
+    item.className = 'status-meta';
+    const dot = document.createElement('span');
+    dot.className = 'dot' + (service.state === 'active' ? ' up' : service.state === 'failed' ? ' down' : '');
+    item.append(dot, service.name + ' · ' + (states[service.state] || '未知'));
+    return item;
+  }));
+  const logs = health.logs || [];
+  $('log-empty').textContent = logs.length ? '' : '暂无记录到的状态变化或错误';
+  $('log-empty').hidden = logs.length > 0;
+  $('events').replaceChildren(...logs.map(log => {
+    const item = document.createElement('li');
+    const stamp = document.createElement('time');
+    stamp.textContent = fullClock.format(log.ts * 1000);
+    const level = document.createElement('span');
+    level.className = 'event-level ' + log.level;
+    level.textContent = levels[log.level] || '状态';
+    const text = document.createElement('span');
+    text.className = 'event-text';
+    const source = document.createElement('strong');
+    source.textContent = log.source;
+    text.append(source, log.message);
+    item.append(stamp, level, text);
+    return item;
+  }));
+}
+
+async function refreshHealth() {
+  try {
+    const reply = await fetch('/api/history?view=system', {cache: 'no-store'});
+    if (reply.ok) updateHealth((await reply.json()).system);
+    else updateHealth(null);
+  } catch {
+    updateHealth(null);
+  }
+}
+
+async function refresh() {
+  const id = ++requestId;
+  try {
+    const result = await fetch('/api/history?range=' + range, { cache: 'no-store' });
+    if (!result.ok) {
+      const hint = remote && (await result.json()).message;
+      throw new Error(hint || '无法读取 MD1000 采样记录');
+    }
+    const next = await result.json();
+    if (id !== requestId) return;
+    data = next;
+    render();
+    updateHealth(next.system);
+  } catch (error) {
+    if (id !== requestId) return;
+    $('updated').textContent = remote && error.message ? error.message : '无法读取 MD1000 采样记录';
+    updateHealth(null);
+  }
+}
+for (const button of document.querySelectorAll('[data-range]')) {
+  button.onclick = () => {
+    range = button.dataset.range;
+    for (const option of document.querySelectorAll('[data-range]')) option.setAttribute('aria-pressed', option === button);
+    refresh();
+  };
+}
+$('probe').onchange = render;
+$('connection').addEventListener('toggle', () => { if ($('connection').open) render(); });
+window.addEventListener('resize', render);
+render();
+refresh();
+setInterval(refresh, 15000);
+if (remote) {
+  const firstSnapshot = setInterval(() => data ? clearInterval(firstSnapshot) : refresh(), 2000);
+} else {
+  refreshHealth();
+  setInterval(refreshHealth, 5000);
+}
+</script>
+</body>
+</html>

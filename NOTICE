@@ -1,0 +1,5 @@
+CJS701 Air Monitor
+
+The Android build uses Eclipse Paho Java MQTT 1.2.5. Its copyright and
+license information is provided in the dependency's about.html and at
+https://github.com/eclipse-paho/paho.mqtt.java.

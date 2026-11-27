@@ -1,0 +1,24 @@
+# CJS701 Air Monitor
+
+Android 8.0 及以上的空气质量和设备监控客户端。首页显示七项空气读数，MD1000 页支持局域网监控及 MQTT 远程回退。
+
+[从 Releases 下载 APK](https://github.com/pooli580/cjs701-air-monitor/releases/latest)。首次安装后，在「设置」中填写自己的数据源。应用默认只有 GitHub 更新源。
+
+## 配置
+
+- **局域网空气质量**填写 ESP32 的局域网 IPv4，接口为 `http://设备地址:8080/api/air`。
+- **远程空气质量**启用「空气质量使用公网 MQTT」，填写 `ssl://主机:端口`、空气主题和可选账号。使用私有证书的服务器可导入 CA 证书。App 通过 Android Keystore 加密已保存的密码。
+- **设备监控**填写监控台根地址，可再填写 MQTT 监控主题用于自动回退。监控台提供 `/api/history?view=system` 和 `/api/history?range=1h`、`6h`、`24h`。远程主题的消息为 gzip 压缩的 24 小时历史接口 JSON 快照，支持 QoS 1 和 Retain。
+- **在线升级**在「设置 → 检查更新」中查看 GitHub Releases 的新版本。首次使用时按安卓安装界面确认。使用同一包名和签名覆盖安装时，应用继续使用原有设备设置。
+
+空气读数 JSON 使用 `status`、`temperature_c`、`humidity_pct`、`hcho_mg_m3`、`tvoc_mg_m3`、`eco2_ppm`、`eco_ppm` 和 `aqi`。成功状态为 `live`，温度单位为摄氏度，湿度为百分比，甲醛和 TVOC 为 mg/m³，等效 CO₂ 和 CO 为 ppm。MQTT 消息还提供 `sampled_at`，单位为 Unix 秒。
+
+历史接口 JSON 包含 `now`、`start`、`interval`、`samples` 和可选的 `system`。每条采样包含 `ts`、`esp`、`router`、`wan` 和 `air`。前三个探测字段使用毫秒表示延迟，`null` 表示未响应。
+
+## 构建和发布
+
+使用 Windows PowerShell 7、JDK 21、Android SDK 平台 API 36、Build Tools 36.0.0 及 Eclipse Paho Java MQTT 1.2.5 JAR。运行 `android/build-apk.ps1`，传入 `-Jdk`、`-Platform`、`-BuildTools`、`-MqttJar`、`-KeyStore` 和 `-OutputApk`。签名库别名为 `cjs701`，密码由进程环境变量 `CJS701_SIGNING_PASSWORD` 提供。
+
+发布时在 `android/AndroidManifest.xml` 提高 `versionCode`，用原密钥签名，再用 `android/new-update-feed.ps1` 生成 `latest.json`。设置 `-ApkBaseUrl` 为该版本的 GitHub Release 下载目录，如 `https://github.com/pooli580/cjs701-air-monitor/releases/download/v1.7/`。将 APK 和 `latest.json` 上传到同一个 GitHub Release。独立分发的构建应使用自己的签名密钥。
+
+[MIT 许可证](LICENSE) · [第三方组件说明](NOTICE)
