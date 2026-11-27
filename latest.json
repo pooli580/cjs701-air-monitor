@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.7.1",
-  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.7.1.apk?ref=updates",
-  "sha256": "4c6a0c9c2c181f9d5864f7b549237ec17c99e3d950f1980776a6f4ce08c5acb6",
-  "notes": "首次公开迁移版。保留本机配置，后续从 GitHub 检查更新。"
+  "versionCode": 10,
+  "versionName": "1.7.2",
+  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.7.2.apk?ref=updates",
+  "sha256": "d78a4322b0992c96eed148405375ed2fb37c709fa74b653c89ebbf14d8345dc2",
+  "notes": "空气质量首页和阈值提醒优先使用局域网。ESP32 局域网接口不可用时自动切到 MQTT，恢复后自动切回。"
 }
