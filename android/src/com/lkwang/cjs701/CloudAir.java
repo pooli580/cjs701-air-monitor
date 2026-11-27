@@ -60,19 +60,11 @@ final class CloudAir {
         if (previous != null) CLOSE_IO.execute(previous::close);
     }
 
-    static boolean enabled(Map<String, ?> settings) {
+    static boolean fallbackEnabled(Map<String, ?> settings) {
         return Boolean.TRUE.equals(settings.get(ENABLED));
     }
 
-    static AirClient.Sample read(Map<String, ?> settings) {
-        if (!enabled(settings)) {
-            String host = (String) settings.get(AirClient.HOST_KEY);
-            return AirClient.fetch(host);
-        }
-        return readCloud(settings);
-    }
-
-    private static synchronized AirClient.Sample readCloud(Map<String, ?> settings) {
+    static synchronized AirClient.Sample read(Map<String, ?> settings) {
         if (readers == 0) return new AirClient.Sample("offline");
         String username = AppConfig.value(settings, USER);
         String secret = AppConfig.value(settings, SECRET);

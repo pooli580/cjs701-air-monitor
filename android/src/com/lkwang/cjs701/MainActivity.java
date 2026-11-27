@@ -391,13 +391,12 @@ public final class MainActivity extends Activity {
     private void startReading() {
         stopReading();
         int token = generation;
-        String ip = settings.getString(AirClient.HOST_KEY, "");
         Map<String, ?> snapshot = settings.getAll();
-        boolean cloud = CloudAir.enabled(snapshot);
+        AirSource air = new AirSource();
         polling = reader.scheduleWithFixedDelay(() -> {
-            AirClient.Sample sample = CloudAir.read(snapshot);
+            AirSource.Reading reading = air.read(snapshot);
             runOnUiThread(() -> {
-                if (generation == token) render(sample, cloud, ip);
+                if (generation == token) render(reading);
             });
         }, 0, 2, TimeUnit.SECONDS);
     }
@@ -407,20 +406,22 @@ public final class MainActivity extends Activity {
         if (polling != null) polling.cancel(true);
     }
 
-    private void render(AirClient.Sample sample, boolean cloud, String ip) {
+    private void render(AirSource.Reading reading) {
+        AirClient.Sample sample = reading.sample;
+        String source = reading.remote ? "公网 MQTT" : "局域网";
         String message;
         switch (sample.status) {
             case "live":
-                message = (cloud ? "公网 MQTT" : "局域网") + " · 已更新";
+                message = source + " · 已更新";
                 break;
             case "waiting":
-                message = cloud ? "公网 MQTT · 等待传感器上报" : "等待传感器上报";
+                message = source + " · 等待传感器上报";
                 break;
             case "stale":
-                message = "暂无有效数据";
+                message = source + " · 暂无有效数据";
                 break;
             case "invalid":
-                message = "ESP32 返回的数据异常";
+                message = source + " · 数据异常";
                 break;
             case "mqtt_settings":
                 message = "请在设置中填写 MQTT 地址、空气主题和账号信息";
@@ -435,7 +436,7 @@ public final class MainActivity extends Activity {
                 message = "MQTT 连接初始化失败";
                 break;
             default:
-                message = cloud ? "公网 MQTT · 当前离线" : "连接失败 · " + ip;
+                message = source + " · 当前离线";
         }
         status.setText(message);
         status.setTextColor("live".equals(sample.status) ? TEAL : MUTED);
@@ -498,8 +499,8 @@ public final class MainActivity extends Activity {
                     AppConfig.MONITOR_LAN);
             monitor.setHint("http://局域网地址:8090/");
             useCloud = new CheckBox(MainActivity.this);
-            useCloud.setText("空气质量使用公网 MQTT");
-            useCloud.setChecked(CloudAir.enabled(settings.getAll()));
+            useCloud.setText("局域网不可用时使用 MQTT");
+            useCloud.setChecked(CloudAir.fallbackEnabled(settings.getAll()));
             form.addView(useCloud);
             broker = savedField(form, "MQTT TLS 地址", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI,
                     AppConfig.MQTT_URI);

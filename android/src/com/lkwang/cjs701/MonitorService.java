@@ -27,6 +27,7 @@ public final class MonitorService extends Service {
     static volatile boolean running;
     private ScheduledExecutorService executor;
     private boolean cloudReader;
+    private final AirSource air = new AirSource();
 
     static SharedPreferences settings(Context context) {
         return context.getSharedPreferences("air_settings", MODE_PRIVATE);
@@ -118,7 +119,7 @@ public final class MonitorService extends Service {
         if (!running) return;
         Map<String, ?> snapshot = settings(this).getAll();
         String ip = AppConfig.value(snapshot, AirClient.HOST_KEY);
-        AirClient.Sample sample = CloudAir.read(snapshot);
+        AirClient.Sample sample = air.read(snapshot).sample;
         if (!running || !"live".equals(sample.status)
                 || !snapshot.equals(settings(this).getAll()) || !alertsEnabled(this)) return;
 
@@ -130,7 +131,8 @@ public final class MonitorService extends Service {
             if (!metric.alertable || limitText == null) continue;
             double limit = Double.parseDouble(limitText);
             double value = sample.values.get(metric);
-            String marker = (CloudAir.enabled(snapshot) ? "mqtt" : ip) + "/" + limitText;
+            // Keep the same threshold event when the sensor switches transports.
+            String marker = (CloudAir.fallbackEnabled(snapshot) ? "mqtt" : ip) + "/" + limitText;
             String old = state.getString(metric.key, "");
             if (value > limit && !marker.equals(old)) {
                 alerts.add(metric.label + " " + metric.display(value) + "（设定值 " + limitText
