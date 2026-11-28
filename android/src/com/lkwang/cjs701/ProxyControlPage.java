@@ -406,6 +406,7 @@ final class ProxyControlPage extends ScrollView {
         starting = state.equals("activating") || state.equals("deactivating");
         boolean running = running();
         boolean automatic = running && report.optBoolean("benchmark");
+        boolean direct = report != null && report.optBoolean("direct_fallback");
         String status = "请先配对 MD1000";
         if (paired()) status = "等待读取状态";
         if (report != null) {
@@ -413,7 +414,7 @@ final class ProxyControlPage extends ScrollView {
             else if (state.equals("activating")) status = "正在启动代理…";
             else if (state.equals("deactivating")) status = "正在关闭代理…";
             else if (state.equals("failed")) status = "代理启动失败";
-            else status = "代理已关闭";
+            else status = direct ? "代理已关闭 · MD1000 直连可用" : "代理已关闭";
         }
         summary.setText(message == null ? status : message);
         JSONObject quotas = report == null ? null : report.optJSONObject("quotas");
@@ -431,7 +432,8 @@ final class ProxyControlPage extends ScrollView {
         String mode = modeSupported ? phone.optString("mode", "") : "";
         if (phone != null) {
             String modeLabel = mode.equals("remote") ? "当前为远程模式" : mode.equals("download") ? "当前为下载模式" : "当前按 Wi-Fi 端口分流";
-            String activeMode = phoneAllowed && modeSupported ? "\n" + modeLabel + " · 切换对新连接生效" : "";
+            String activeMode = phoneAllowed && direct ? "\n当前为直连上网" :
+                    phoneAllowed && modeSupported ? "\n" + modeLabel + " · 切换对新连接生效" : "";
             phoneInfo.setText((phoneAllowed ? "本机已获准接入 · 有效 12 小时" : "本机接入尚未启用")
                     + activeMode + "\n主机 " + phone.optString("host") + "\nWi-Fi 代理端口 17890 或 17891\n国内常见平台与局域网直连");
         } else {
