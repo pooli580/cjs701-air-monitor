@@ -4,14 +4,17 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -43,8 +46,8 @@ final class ProxyControlPage extends ScrollView {
     private final TextView downloadNode;
     private final TextView phoneInfo;
     private final TextView speedInfo;
-    private final TextView subscriptionA;
-    private final TextView subscriptionB;
+    private final QuotaRow subscriptionA;
+    private final QuotaRow subscriptionB;
     private final Button pair;
     private final Button refresh;
     private final Button power;
@@ -91,10 +94,8 @@ final class ProxyControlPage extends ScrollView {
         append(status, power, 12);
 
         LinearLayout quota = card(page, "订阅流量");
-        subscriptionA = text("", 15, AppUi.INK);
-        subscriptionB = text("", 15, AppUi.INK);
-        append(quota, subscriptionA, 7);
-        append(quota, subscriptionB, 7);
+        subscriptionA = new QuotaRow(quota, "订阅 A", 8);
+        subscriptionB = new QuotaRow(quota, "订阅 B", 14);
 
         LinearLayout phone = card(page, "手机 Wi-Fi 接入");
         phoneInfo = text("等待配对", 14, AppUi.MUTED);
@@ -200,18 +201,69 @@ final class ProxyControlPage extends ScrollView {
         return number.format(value) + " Mbps";
     }
 
-    private String quotaLabel(String title, JSONObject quota) {
-        if (quota == null || quota.optLong("total_bytes") <= 0) return title + " · 等待订阅余量";
-        NumberFormat number = NumberFormat.getNumberInstance();
-        number.setMaximumFractionDigits(2);
-        double unit = 1L << 30;
-        String label = title + " · 剩余 " + number.format(quota.optLong("remaining_bytes") / unit)
-                + " / " + number.format(quota.optLong("total_bytes") / unit) + " GiB";
-        try {
-            Date updated = new Date(OffsetDateTime.parse(quota.optString("updated_at")).toInstant().toEpochMilli());
-            return label + "\n订阅更新于 " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(updated);
-        } catch (DateTimeParseException error) {
-            return label;
+    private final class QuotaRow {
+        private final TextView percent;
+        private final ProgressBar remainingBar;
+        private final TextView amount;
+        private final TextView updated;
+
+        QuotaRow(LinearLayout parent, String title, int margin) {
+            LinearLayout row = column();
+            LinearLayout heading = new LinearLayout(activity);
+            heading.setGravity(Gravity.CENTER_VERTICAL);
+            heading.addView(text(title, 15, AppUi.INK), new LinearLayout.LayoutParams(0, -2, 1));
+            percent = text("—", 15, AppUi.TEAL);
+            percent.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            heading.addView(percent);
+            row.addView(heading);
+
+            remainingBar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
+            remainingBar.setMax(1000);
+            remainingBar.setIndeterminate(false);
+            remainingBar.setProgressBackgroundTintList(ColorStateList.valueOf(AppUi.SELECTED));
+            remainingBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            LinearLayout.LayoutParams barSize = new LinearLayout.LayoutParams(-1, dp(8));
+            barSize.topMargin = dp(4);
+            row.addView(remainingBar, barSize);
+
+            amount = text("等待订阅余量", 14, AppUi.INK);
+            updated = text("", 12, AppUi.MUTED);
+            append(row, amount, 4);
+            row.addView(updated);
+            append(parent, row, margin);
+        }
+
+        void render(JSONObject quota) {
+            long total = quota == null ? 0 : quota.optLong("total_bytes");
+            remainingBar.setVisibility(total > 0 ? View.VISIBLE : View.GONE);
+            if (total <= 0) {
+                percent.setText("—");
+                percent.setTextColor(AppUi.MUTED);
+                amount.setText("等待订阅余量");
+                updated.setVisibility(View.GONE);
+                return;
+            }
+            long remaining = Math.max(0, Math.min(total, quota.optLong("remaining_bytes")));
+            double ratio = (double) remaining / total;
+            NumberFormat fraction = NumberFormat.getPercentInstance();
+            fraction.setMaximumFractionDigits(1);
+            int color = ratio <= 0.15 ? 0xFF9C5313 : AppUi.TEAL;
+            percent.setText(fraction.format(ratio));
+            percent.setTextColor(color);
+            remainingBar.setProgressTintList(ColorStateList.valueOf(color));
+            remainingBar.setProgress((int) Math.round(ratio * remainingBar.getMax()));
+
+            NumberFormat quantity = NumberFormat.getNumberInstance();
+            quantity.setMaximumFractionDigits(2);
+            double gibibyte = 1L << 30;
+            amount.setText("剩余 " + quantity.format(remaining / gibibyte) + " / " + quantity.format(total / gibibyte) + " GiB");
+            try {
+                Date timestamp = new Date(OffsetDateTime.parse(quota.optString("updated_at")).toInstant().toEpochMilli());
+                updated.setText("订阅更新于 " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(timestamp));
+                updated.setVisibility(View.VISIBLE);
+            } catch (DateTimeParseException error) {
+                updated.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -336,8 +388,8 @@ final class ProxyControlPage extends ScrollView {
         }
         summary.setText(message == null ? status : message);
         JSONObject quotas = report == null ? null : report.optJSONObject("quotas");
-        subscriptionA.setText(quotaLabel("订阅 A", quotas == null ? null : quotas.optJSONObject("subscription-a")));
-        subscriptionB.setText(quotaLabel("订阅 B", quotas == null ? null : quotas.optJSONObject("subscription-b")));
+        subscriptionA.render(quotas == null ? null : quotas.optJSONObject("subscription-a"));
+        subscriptionB.render(quotas == null ? null : quotas.optJSONObject("subscription-b"));
         power.setText(running || starting ? "关闭代理" : "开启代理");
         benchmark.setText(automatic ? "暂停自动测速" : "开启自动测速");
         pair.setEnabled(!busy);
