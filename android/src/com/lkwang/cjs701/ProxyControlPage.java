@@ -2,9 +2,11 @@ package com.lkwang.cjs701;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.widget.Button;
@@ -19,7 +21,10 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
+import java.text.DateFormat;
+import java.text.NumberFormat;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -34,12 +39,17 @@ final class ProxyControlPage extends ScrollView {
     private final TextView summary;
     private final TextView remoteNode;
     private final TextView downloadNode;
+    private final TextView phoneInfo;
+    private final TextView speedInfo;
     private final Button pair;
     private final Button refresh;
     private final Button power;
     private final Button benchmark;
     private final Button pickRemote;
     private final Button pickDownload;
+    private final Button speedDetails;
+    private final Button allowPhone;
+    private final Button wifiSettings;
     private JSONObject report;
     private boolean active;
     private boolean busy;
@@ -76,6 +86,16 @@ final class ProxyControlPage extends ScrollView {
         power.setOnClickListener(view -> setEnabled("/v1/proxy", !(running() || starting)));
         append(status, power, 12);
 
+        LinearLayout phone = card(page, "手机 Wi-Fi 接入");
+        phoneInfo = text("等待配对", 14, AppUi.MUTED);
+        phone.addView(phoneInfo);
+        allowPhone = button("启用本机接入", false);
+        allowPhone.setOnClickListener(view -> setEnabled("/v1/phone", !report.optJSONObject("phone").optBoolean("enabled")));
+        append(phone, allowPhone, 8);
+        wifiSettings = button("打开 Wi-Fi 设置", false);
+        wifiSettings.setOnClickListener(view -> activity.startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
+        append(phone, wifiSettings, 6);
+
         LinearLayout remote = card(page, "远程 · 17890");
         remoteNode = text("—", 15, AppUi.MUTED);
         remote.addView(remoteNode);
@@ -86,6 +106,12 @@ final class ProxyControlPage extends ScrollView {
         LinearLayout download = card(page, "下载 · 17891");
         downloadNode = text("—", 15, AppUi.MUTED);
         download.addView(downloadNode);
+        speedInfo = text("等待第一次自动测速", 14, AppUi.MUTED);
+        speedInfo.setPadding(0, dp(8), 0, 0);
+        download.addView(speedInfo);
+        speedDetails = button("查看测速结果", false);
+        speedDetails.setOnClickListener(view -> showSpeedDetails());
+        append(download, speedDetails, 6);
         pickDownload = button("选择下载节点", false);
         pickDownload.setOnClickListener(view -> choose("download"));
         append(download, pickDownload, 8);
@@ -137,7 +163,7 @@ final class ProxyControlPage extends ScrollView {
             for (int index = 0; index < nodes.length(); index++) {
                 String node = nodes.optString(index);
                 if (node.isEmpty() || node.equals("REJECT")) continue;
-                choices.add(node);
+                choices.add(node + " · " + delayLabel(node));
                 names.add(node);
             }
         }
@@ -145,6 +171,66 @@ final class ProxyControlPage extends ScrollView {
                 .setItems(choices.toArray(new String[0]), (dialog, index) -> action("/v1/selection", "group", key,
                         "node", names.get(index) == null ? JSONObject.NULL : names.get(index)))
                 .setNegativeButton("取消", null).show();
+    }
+
+    private String delayLabel(String node) {
+        JSONObject delays = report == null ? null : report.optJSONObject("delays_ms");
+        int latency = delays == null ? 0 : delays.optInt(node);
+        return latency > 0 ? latency + " ms" : "暂无延迟";
+    }
+
+    private JSONObject speedRound() {
+        JSONObject speed = report == null ? null : report.optJSONObject("speed");
+        return speed == null ? null : speed.optJSONObject("latest");
+    }
+
+    private String rate(double value) {
+        NumberFormat number = NumberFormat.getNumberInstance();
+        number.setMaximumFractionDigits(1);
+        return number.format(value) + " Mbps";
+    }
+
+    private String speedSummary() {
+        JSONObject speed = report == null ? null : report.optJSONObject("speed");
+        boolean running = speed != null && speed.optBoolean("running");
+        JSONObject round = speedRound();
+        if (round == null) return running ? "正在测下载速度…" : "等待第一次自动测速";
+        String prefix = running ? "正在测下载速度…\n" : "";
+        String time = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+                .format(new Date(round.optLong("finished_at") * 1000));
+        JSONArray samples = round.optJSONArray("samples");
+        int total = samples == null ? 0 : samples.length();
+        int successful = 0;
+        double fastest = 0;
+        for (int index = 0; index < total; index++) {
+            JSONObject sample = samples.optJSONObject(index);
+            if (sample == null || sample.isNull("mbps")) continue;
+            successful++;
+            fastest = Math.max(fastest, sample.optDouble("mbps", 0));
+        }
+        String result;
+        if (round.optString("outcome").equals("no_candidates")) result = "暂无通过延迟检查的节点";
+        else if (successful == 0) result = "未取得完整下载样本";
+        else result = "最快 " + rate(fastest) + " · " + successful + "/" + total + " 成功";
+        return prefix + "上轮 " + time + "\n" + result;
+    }
+
+    private void showSpeedDetails() {
+        JSONObject round = speedRound();
+        if (round == null) return;
+        JSONArray samples = round.optJSONArray("samples");
+        if (samples == null) return;
+        StringBuilder detail = new StringBuilder();
+        for (int index = 0; index < samples.length(); index++) {
+            JSONObject sample = samples.optJSONObject(index);
+            if (sample == null) continue;
+            if (detail.length() > 0) detail.append("\n\n");
+            detail.append(sample.optString("node")).append('\n');
+            detail.append(sample.optInt("delay_ms")).append(" ms · ");
+            detail.append(sample.isNull("mbps") ? "下载未完成" : rate(sample.optDouble("mbps")));
+        }
+        new AlertDialog.Builder(activity).setTitle("最近一轮下载测速").setMessage(detail.toString())
+                .setPositiveButton("关闭", null).show();
     }
 
     private void setEnabled(String path, boolean enabled) {
@@ -230,8 +316,23 @@ final class ProxyControlPage extends ScrollView {
         refresh.setEnabled(paired() && !busy);
         power.setEnabled(report != null && !busy && !state.equals("deactivating"));
         benchmark.setEnabled(running && !busy);
+        JSONObject phone = report == null ? null : report.optJSONObject("phone");
+        boolean phoneAllowed = phone != null && phone.optBoolean("enabled");
+        if (phone != null) {
+            phoneInfo.setText((phoneAllowed ? "本机已获准接入 · 有效 12 小时" : "本机接入尚未启用")
+                    + "\n主机 " + phone.optString("host") + "\n端口 17890 低延迟 / 17891 下载\n国内常见平台与局域网直连");
+        } else {
+            phoneInfo.setText(paired() ? "等待接入状态" : "配对后可启用本机接入");
+        }
+        allowPhone.setEnabled(phone != null && !busy);
+        allowPhone.setText(phoneAllowed ? "关闭本机接入" : "启用本机接入");
+        wifiSettings.setEnabled(phoneAllowed);
         remoteNode.setText(running ? nodeLabel("remote", report.optJSONObject("remote")) : "—");
         downloadNode.setText(running ? nodeLabel("download", report.optJSONObject("download")) : "—");
+        speedInfo.setText(speedSummary());
+        JSONObject round = speedRound();
+        JSONArray samples = round == null ? null : round.optJSONArray("samples");
+        speedDetails.setEnabled(samples != null && samples.length() > 0 && !busy);
         pickRemote.setEnabled(running && !busy);
         JSONObject download = running ? report.optJSONObject("download") : null;
         JSONArray candidates = download == null ? null : download.optJSONArray("nodes");
@@ -242,7 +343,8 @@ final class ProxyControlPage extends ScrollView {
         if (group == null || group.optString("node").equals("REJECT")) return "暂无可用节点";
         String mode = key.equals("remote") ? (group.optBoolean("fixed") ? "手动" : "自动")
                 : (report.optBoolean("benchmark") ? "自动测速" : "已暂停测速");
-        return mode + " · " + group.optString("node", "等待节点载入");
+        String node = group.optString("node", "等待节点载入");
+        return mode + " · " + node + "\n" + delayLabel(node);
     }
 
     void activate() {
