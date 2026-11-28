@@ -59,9 +59,12 @@ public final class MainActivity extends Activity {
     private FrameLayout content;
     private ScrollView airPage;
     private DashboardPage dashboardPage;
+    private ProxyControlPage proxyPage;
     private Tab airTab;
     private Tab dashboardTab;
-    private boolean showingDashboard;
+    private Tab proxyTab;
+    private enum Page { AIR, DASHBOARD, PROXY }
+    private Page selectedPage = Page.AIR;
     private boolean foreground;
     private Connections connectionsDialog;
     private android.window.OnBackInvokedCallback backToAir;
@@ -89,10 +92,11 @@ public final class MainActivity extends Activity {
         content.addView(airPage, new FrameLayout.LayoutParams(-1, -1));
         root.addView(createNavigation());
         setContentView(root);
-        if (savedInstanceState != null && savedInstanceState.getBoolean("showingDashboard")) {
-            selectPage(true, false);
-        } else {
-            updateTabs();
+        updateTabs();
+        if (savedInstanceState != null) {
+            int saved = savedInstanceState.getInt("selectedPage",
+                    savedInstanceState.getBoolean("showingDashboard") ? Page.DASHBOARD.ordinal() : Page.AIR.ordinal());
+            if (saved >= 0 && saved < Page.values().length) selectPage(Page.values()[saved], false);
         }
         updateMonitorButton();
     }
@@ -167,10 +171,12 @@ public final class MainActivity extends Activity {
         LinearLayout items = row();
         items.setPadding(dp(16), dp(4), dp(16), dp(5));
         bar.addView(items, new LinearLayout.LayoutParams(-1, -2));
-        airTab = new Tab("空气质量", R.drawable.ic_air, false);
-        dashboardTab = new Tab("MD1000", R.drawable.ic_md1000, true);
+        airTab = new Tab("空气质量", R.drawable.ic_air, Page.AIR);
+        dashboardTab = new Tab("MD1000", R.drawable.ic_md1000, Page.DASHBOARD);
+        proxyTab = new Tab("代理", R.drawable.ic_proxy, Page.PROXY);
         items.addView(airTab, new LinearLayout.LayoutParams(0, -2, 1));
         items.addView(dashboardTab, new LinearLayout.LayoutParams(0, -2, 1));
+        items.addView(proxyTab, new LinearLayout.LayoutParams(0, -2, 1));
         return bar;
     }
 
@@ -179,7 +185,7 @@ public final class MainActivity extends Activity {
         private final ImageView icon;
         private final TextView label;
 
-        Tab(String title, int image, boolean dashboard) {
+        Tab(String title, int image, Page page) {
             super(MainActivity.this);
             setOrientation(VERTICAL);
             setGravity(Gravity.CENTER);
@@ -188,7 +194,7 @@ public final class MainActivity extends Activity {
             setMinimumHeight(dp(56));
             setPadding(0, dp(4), 0, dp(3));
             setBackground(AppUi.action(MainActivity.this, Color.TRANSPARENT, 16, 0));
-            setOnClickListener(view -> selectPage(dashboard, true));
+            setOnClickListener(view -> selectPage(page, true));
 
             indicator = new FrameLayout(MainActivity.this);
             indicator.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
@@ -245,7 +251,8 @@ public final class MainActivity extends Activity {
                 if (vertical > dp(28) && vertical > Math.abs(x - startX)) tracking = false;
             } else if (action == MotionEvent.ACTION_UP) {
                 float dx = x - startX;
-                boolean towardOtherPage = showingDashboard ? dx > dp(56) : dx < -dp(56);
+                int neighbor = selectedPage.ordinal() + (dx < 0 ? 1 : -1);
+                boolean towardOtherPage = Math.abs(dx) > dp(56) && neighbor >= 0 && neighbor < Page.values().length;
                 boolean swipe = tracking && towardOtherPage && Math.abs(dx) > 1.7f * Math.abs(y - startY);
                 tracking = false;
                 if (swipe) {
@@ -253,7 +260,7 @@ public final class MainActivity extends Activity {
                     cancel.setAction(MotionEvent.ACTION_CANCEL);
                     super.dispatchTouchEvent(cancel);
                     cancel.recycle();
-                    selectPage(!showingDashboard, true);
+                    selectPage(Page.values()[neighbor], true);
                     return true;
                 }
             }
@@ -261,25 +268,36 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void createDashboard() {
-        dashboardPage = new DashboardPage(this);
-        content.addView(dashboardPage, new FrameLayout.LayoutParams(-1, -1));
+    private View pageView(Page page) {
+        if (page == Page.AIR) return airPage;
+        if (page == Page.DASHBOARD) {
+            if (dashboardPage == null) {
+                dashboardPage = new DashboardPage(this);
+                content.addView(dashboardPage, new FrameLayout.LayoutParams(-1, -1));
+            }
+            return dashboardPage;
+        }
+        if (proxyPage == null) {
+            proxyPage = new ProxyControlPage(this, settings);
+            content.addView(proxyPage, new FrameLayout.LayoutParams(-1, -1));
+        }
+        return proxyPage;
     }
 
-    private void selectPage(boolean dashboard, boolean animate) {
-        if (showingDashboard == dashboard) return;
+    private void selectPage(Page page, boolean animate) {
+        if (selectedPage == page) return;
         if (foreground) deactivatePage();
-        showingDashboard = dashboard;
-        if (dashboardPage == null) createDashboard();
-        View incoming = dashboard ? dashboardPage : airPage;
-        View outgoing = dashboard ? airPage : dashboardPage;
+        Page previous = selectedPage;
+        selectedPage = page;
+        View incoming = pageView(page);
+        View outgoing = pageView(previous);
         outgoing.animate().cancel();
         outgoing.setVisibility(View.GONE);
         incoming.setVisibility(View.VISIBLE);
         incoming.setTranslationX(0);
         incoming.setAlpha(1);
         if (animate && ValueAnimator.areAnimatorsEnabled()) {
-            incoming.setTranslationX(dp(dashboard ? 22 : -22));
+            incoming.setTranslationX(dp(page.ordinal() > previous.ordinal() ? 22 : -22));
             incoming.setAlpha(0.84f);
             incoming.animate().translationX(0).alpha(1).setDuration(175).start();
         }
@@ -288,14 +306,15 @@ public final class MainActivity extends Activity {
     }
 
     private void updateTabs() {
-        airTab.update(!showingDashboard);
-        dashboardTab.update(showingDashboard);
+        airTab.update(selectedPage == Page.AIR);
+        dashboardTab.update(selectedPage == Page.DASHBOARD);
+        proxyTab.update(selectedPage == Page.PROXY);
         if (Build.VERSION.SDK_INT >= 33) {
-            if (showingDashboard && backToAir == null) {
-                backToAir = () -> selectPage(false, true);
+            if (selectedPage != Page.AIR && backToAir == null) {
+                backToAir = () -> selectPage(Page.AIR, true);
                 getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                         android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, backToAir);
-            } else if (!showingDashboard && backToAir != null) {
+            } else if (selectedPage == Page.AIR && backToAir != null) {
                 getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backToAir);
                 backToAir = null;
             }
@@ -303,8 +322,10 @@ public final class MainActivity extends Activity {
     }
 
     private void activatePage() {
-        if (showingDashboard) {
+        if (selectedPage == Page.DASHBOARD) {
             dashboardPage.activate();
+        } else if (selectedPage == Page.PROXY) {
+            proxyPage.activate();
         } else {
             CloudAir.acquire();
             startReading();
@@ -312,8 +333,10 @@ public final class MainActivity extends Activity {
     }
 
     private void deactivatePage() {
-        if (showingDashboard) {
+        if (selectedPage == Page.DASHBOARD) {
             dashboardPage.deactivate();
+        } else if (selectedPage == Page.PROXY) {
+            proxyPage.deactivate();
         } else {
             stopReading();
             CloudAir.release();
@@ -321,12 +344,12 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
-        state.putBoolean("showingDashboard", showingDashboard);
+        state.putInt("selectedPage", selectedPage.ordinal());
         super.onSaveInstanceState(state);
     }
 
     @Override public void onBackPressed() {
-        if (showingDashboard) selectPage(false, true);
+        if (selectedPage != Page.AIR) selectPage(Page.AIR, true);
         else super.onBackPressed();
     }
 
@@ -384,6 +407,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onDestroy() {
         if (dashboardPage != null) dashboardPage.destroy();
+        if (proxyPage != null) proxyPage.destroy();
         reader.shutdownNow();
         super.onDestroy();
     }

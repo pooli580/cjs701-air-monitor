@@ -91,7 +91,7 @@ final class CloudAir {
                 + Base64.encodeToString(cipher.doFinal(password.getBytes(StandardCharsets.UTF_8)), Base64.NO_WRAP);
     }
 
-    private static char[] decrypt(String secret) throws GeneralSecurityException, java.io.IOException {
+    static char[] decrypt(String secret) throws GeneralSecurityException, java.io.IOException {
         String[] fields = secret.split("\\.", 2);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, deviceKey(),

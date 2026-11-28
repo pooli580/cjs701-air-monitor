@@ -38,5 +38,6 @@ $feed = [ordered]@{
     sha256 = (Get-FileHash -LiteralPath $apkFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     notes = $Notes
 } | ConvertTo-Json
+$feed = $feed.Replace("`r`n", "`n")
 [IO.File]::WriteAllText($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Output),
     "$feed`n", [Text.UTF8Encoding]::new($false))

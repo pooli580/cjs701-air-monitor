@@ -2,6 +2,8 @@
 
 Android 8.0 及以上的空气质量和设备监控客户端。首页显示七项空气读数，MD1000 页支持局域网监控及 MQTT 远程回退。
 
+1.8 的「代理」页用于在同一局域网控制 MD1000 的代理服务、下载测速和节点选择。需要 MD1000 提供配对码。应用根据配对码验证板上 HTTPS 证书，并通过 Android Keystore 保护已保存的配对码。
+
 [从 Releases 下载 APK](https://github.com/pooli580/cjs701-air-monitor/releases/latest)。首次安装后，在「设置」中填写自己的数据源。应用默认只有 GitHub 更新源。
 
 ## 配置
