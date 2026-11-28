@@ -25,6 +25,8 @@ import java.util.Date;
 import java.util.List;
 import java.text.DateFormat;
 import java.text.NumberFormat;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -41,6 +43,8 @@ final class ProxyControlPage extends ScrollView {
     private final TextView downloadNode;
     private final TextView phoneInfo;
     private final TextView speedInfo;
+    private final TextView subscriptionA;
+    private final TextView subscriptionB;
     private final Button pair;
     private final Button refresh;
     private final Button power;
@@ -85,6 +89,12 @@ final class ProxyControlPage extends ScrollView {
         power = button("开启代理", true);
         power.setOnClickListener(view -> setEnabled("/v1/proxy", !(running() || starting)));
         append(status, power, 12);
+
+        LinearLayout quota = card(page, "订阅流量");
+        subscriptionA = text("", 15, AppUi.INK);
+        subscriptionB = text("", 15, AppUi.INK);
+        append(quota, subscriptionA, 7);
+        append(quota, subscriptionB, 7);
 
         LinearLayout phone = card(page, "手机 Wi-Fi 接入");
         phoneInfo = text("等待配对", 14, AppUi.MUTED);
@@ -188,6 +198,21 @@ final class ProxyControlPage extends ScrollView {
         NumberFormat number = NumberFormat.getNumberInstance();
         number.setMaximumFractionDigits(1);
         return number.format(value) + " Mbps";
+    }
+
+    private String quotaLabel(String title, JSONObject quota) {
+        if (quota == null || quota.optLong("total_bytes") <= 0) return title + " · 等待订阅余量";
+        NumberFormat number = NumberFormat.getNumberInstance();
+        number.setMaximumFractionDigits(2);
+        double unit = 1L << 30;
+        String label = title + " · 剩余 " + number.format(quota.optLong("remaining_bytes") / unit)
+                + " / " + number.format(quota.optLong("total_bytes") / unit) + " GiB";
+        try {
+            Date updated = new Date(OffsetDateTime.parse(quota.optString("updated_at")).toInstant().toEpochMilli());
+            return label + "\n订阅更新于 " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(updated);
+        } catch (DateTimeParseException error) {
+            return label;
+        }
     }
 
     private String speedSummary() {
@@ -310,6 +335,9 @@ final class ProxyControlPage extends ScrollView {
             else status = "代理已关闭";
         }
         summary.setText(message == null ? status : message);
+        JSONObject quotas = report == null ? null : report.optJSONObject("quotas");
+        subscriptionA.setText(quotaLabel("订阅 A", quotas == null ? null : quotas.optJSONObject("subscription-a")));
+        subscriptionB.setText(quotaLabel("订阅 B", quotas == null ? null : quotas.optJSONObject("subscription-b")));
         power.setText(running || starting ? "关闭代理" : "开启代理");
         benchmark.setText(automatic ? "暂停自动测速" : "开启自动测速");
         pair.setEnabled(!busy);
