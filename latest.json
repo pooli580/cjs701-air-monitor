@@ -1,7 +1,7 @@
 {
-  "versionCode": 15,
-  "versionName": "1.8.4",
-  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.4.apk?ref=updates",
-  "sha256": "f267cc8431e663ef717cb1579605b3edc41f02f14c9542cd294d3fab3cb26d52",
-  "notes": "手机 Wi-Fi 接入新增远程模式和下载模式按钮。通过 App 为本机切换新建代理连接的策略组，App 会记住上次选择。"
+  "versionCode": 16,
+  "versionName": "1.8.5",
+  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.5.apk?ref=updates",
+  "sha256": "97c7a9c3eccf6088d39a9637db780a7520ef5e414d69b38eb2a89d2a29a5db54",
+  "notes": "MD1000 安装直连服务后，关闭订阅代理会让已获准接入的设备继续直连上网，App 显示当前直连状态。"
 }
