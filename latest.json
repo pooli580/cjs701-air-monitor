@@ -1,7 +1,7 @@
 {
-  "versionCode": 14,
-  "versionName": "1.8.3",
-  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.3.apk?ref=updates",
-  "sha256": "cad44f5e4b52f6f60e079272481410c8f4dc187ba9facc2361d6aa59fec27215",
-  "notes": "代理页新增两条订阅的剩余流量进度条和百分比，继续显示具体余量、总量和订阅更新时间。"
+  "versionCode": 15,
+  "versionName": "1.8.4",
+  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.4.apk?ref=updates",
+  "sha256": "f267cc8431e663ef717cb1579605b3edc41f02f14c9542cd294d3fab3cb26d52",
+  "notes": "手机 Wi-Fi 接入新增远程模式和下载模式按钮。通过 App 为本机切换新建代理连接的策略组，App 会记住上次选择。"
 }
