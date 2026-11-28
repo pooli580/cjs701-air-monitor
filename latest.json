@@ -1,7 +1,7 @@
 {
-  "versionCode": 11,
-  "versionName": "1.8",
-  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.apk?ref=updates",
-  "sha256": "5a65b560bf21fafc00acbb7c1d786d5a8c09db5f3aac3f04a31c005fdfcda07f",
-  "notes": "新增「代理」页。在同一局域网配对 MD1000 后，可开关代理、手动选择日本、新加坡、韩国节点，并暂停或恢复下载测速。"
+  "versionCode": 12,
+  "versionName": "1.8.1",
+  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.1.apk?ref=updates",
+  "sha256": "ff4b241a34ca47bae638794b7cc11966a88cf14d9c75792641d163774416facb",
+  "notes": "代理页新增节点延迟、最近一轮下载测速结果和手机 Wi-Fi 分流接入。国内常见平台与局域网地址直连，其余目标由 MD1000 的代理策略组处理。"
 }
