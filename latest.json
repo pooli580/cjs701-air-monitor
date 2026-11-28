@@ -1,7 +1,7 @@
 {
-  "versionCode": 10,
-  "versionName": "1.7.2",
-  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.7.2.apk?ref=updates",
-  "sha256": "d78a4322b0992c96eed148405375ed2fb37c709fa74b653c89ebbf14d8345dc2",
-  "notes": "空气质量首页和阈值提醒优先使用局域网。ESP32 局域网接口不可用时自动切到 MQTT，恢复后自动切回。"
+  "versionCode": 11,
+  "versionName": "1.8",
+  "apkUrl": "https://api.github.com/repos/pooli580/cjs701-air-monitor/contents/CJS701-AirMonitor-1.8.apk?ref=updates",
+  "sha256": "5a65b560bf21fafc00acbb7c1d786d5a8c09db5f3aac3f04a31c005fdfcda07f",
+  "notes": "新增「代理」页。在同一局域网配对 MD1000 后，可开关代理、手动选择日本、新加坡、韩国节点，并暂停或恢复下载测速。"
 }
