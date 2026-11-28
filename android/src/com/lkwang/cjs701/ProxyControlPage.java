@@ -37,6 +37,7 @@ import javax.net.ssl.SSLException;
 
 final class ProxyControlPage extends ScrollView {
     private static final String PAIRING = "md1000_proxy_pairing";
+    private static final String PHONE_MODE = "md1000_phone_mode";
     private final Activity activity;
     private final SharedPreferences settings;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -56,6 +57,8 @@ final class ProxyControlPage extends ScrollView {
     private final Button pickDownload;
     private final Button speedDetails;
     private final Button allowPhone;
+    private final Button remoteMode;
+    private final Button downloadMode;
     private final Button wifiSettings;
     private JSONObject report;
     private boolean active;
@@ -101,8 +104,18 @@ final class ProxyControlPage extends ScrollView {
         phoneInfo = text("等待配对", 14, AppUi.MUTED);
         phone.addView(phoneInfo);
         allowPhone = button("启用本机接入", false);
-        allowPhone.setOnClickListener(view -> setEnabled("/v1/phone", !report.optJSONObject("phone").optBoolean("enabled")));
+        allowPhone.setOnClickListener(view -> togglePhone());
         append(phone, allowPhone, 8);
+        LinearLayout modes = new LinearLayout(activity);
+        remoteMode = button("远程模式", false);
+        remoteMode.setOnClickListener(view -> action("/v1/phone-mode", "mode", "remote"));
+        downloadMode = button("下载模式", false);
+        downloadMode.setOnClickListener(view -> action("/v1/phone-mode", "mode", "download"));
+        LinearLayout.LayoutParams firstMode = new LinearLayout.LayoutParams(0, -2, 1);
+        firstMode.setMarginEnd(dp(8));
+        modes.addView(remoteMode, firstMode);
+        modes.addView(downloadMode, new LinearLayout.LayoutParams(0, -2, 1));
+        append(phone, modes, 6);
         wifiSettings = button("打开 Wi-Fi 设置", false);
         wifiSettings.setOnClickListener(view -> activity.startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         append(phone, wifiSettings, 6);
@@ -314,6 +327,17 @@ final class ProxyControlPage extends ScrollView {
         action(path, "enabled", enabled);
     }
 
+    private void togglePhone() {
+        JSONObject phone = report.optJSONObject("phone");
+        boolean enabled = !phone.optBoolean("enabled");
+        String preferred = settings.getString(PHONE_MODE, "");
+        if (enabled && phone.has("mode") && (preferred.equals("remote") || preferred.equals("download"))) {
+            action("/v1/phone", "enabled", true, "mode", preferred);
+        } else {
+            setEnabled("/v1/phone", enabled);
+        }
+    }
+
     private void action(String path, Object... fields) {
         JSONObject body = new JSONObject();
         try {
@@ -344,7 +368,12 @@ final class ProxyControlPage extends ScrollView {
                     Arrays.fill(pairing, '\0');
                 }
                 address = client.host + ":" + client.port;
-                if (path != null) client.request(path, data);
+                if (path != null) {
+                    client.request(path, data);
+                    if ("/v1/phone-mode".equals(path)) {
+                        settings.edit().putString(PHONE_MODE, data.getString("mode")).apply();
+                    }
+                }
                 if ("/v1/proxy".equals(path) || "/v1/benchmark".equals(path)) Thread.sleep(400);
                 result = client.request("/v1/status", null);
             } catch (SSLException problem) {
@@ -398,14 +427,20 @@ final class ProxyControlPage extends ScrollView {
         benchmark.setEnabled(running && !busy);
         JSONObject phone = report == null ? null : report.optJSONObject("phone");
         boolean phoneAllowed = phone != null && phone.optBoolean("enabled");
+        boolean modeSupported = phone != null && phone.has("mode");
+        String mode = modeSupported ? phone.optString("mode", "") : "";
         if (phone != null) {
+            String modeLabel = mode.equals("remote") ? "当前为远程模式" : mode.equals("download") ? "当前为下载模式" : "当前按 Wi-Fi 端口分流";
+            String activeMode = phoneAllowed && modeSupported ? "\n" + modeLabel + " · 切换对新连接生效" : "";
             phoneInfo.setText((phoneAllowed ? "本机已获准接入 · 有效 12 小时" : "本机接入尚未启用")
-                    + "\n主机 " + phone.optString("host") + "\n端口 17890 低延迟 / 17891 下载\n国内常见平台与局域网直连");
+                    + activeMode + "\n主机 " + phone.optString("host") + "\nWi-Fi 代理端口 17890 或 17891\n国内常见平台与局域网直连");
         } else {
             phoneInfo.setText(paired() ? "等待接入状态" : "配对后可启用本机接入");
         }
         allowPhone.setEnabled(phone != null && !busy);
         allowPhone.setText(phoneAllowed ? "关闭本机接入" : "启用本机接入");
+        showMode(remoteMode, mode.equals("remote"), phoneAllowed && modeSupported && !busy);
+        showMode(downloadMode, mode.equals("download"), phoneAllowed && modeSupported && !busy);
         wifiSettings.setEnabled(phoneAllowed);
         remoteNode.setText(running ? nodeLabel("remote", report.optJSONObject("remote")) : "—");
         downloadNode.setText(running ? nodeLabel("download", report.optJSONObject("download")) : "—");
@@ -464,6 +499,13 @@ final class ProxyControlPage extends ScrollView {
         button.setTextColor(primary ? Color.WHITE : AppUi.TEAL);
         button.setBackground(AppUi.action(activity, primary ? AppUi.TEAL : AppUi.SELECTED, 14, 0));
         return button;
+    }
+
+    private void showMode(Button button, boolean selected, boolean available) {
+        button.setSelected(selected);
+        button.setEnabled(available);
+        button.setTextColor(selected ? Color.WHITE : AppUi.TEAL);
+        button.setBackground(AppUi.action(activity, selected ? AppUi.TEAL : AppUi.SELECTED, 14, 0));
     }
 
     private LinearLayout column() {
